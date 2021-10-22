@@ -34,6 +34,11 @@ private slots:
     void SetBufTX(uint8_t ID);
     void decodeData();
     void miTimerOnTime();
+    void paint();
+    void refreshButtons();
+    void refreshLeds(uint16_t mask,uint8_t index);
+    void on_spinBox_valueChanged(int arg1);
+
 private:
     Ui::MainWindow *ui;
 
@@ -86,6 +91,9 @@ private:
     }_udat;
 
     _udat myWord;
-    uint8_t  index, nbytes, cks, header, timeoutRx,numLed,ledState;
+    uint8_t  index, nbytes, cks, header, timeoutRx,numLed,ledState,numButton,flanco;
+    uint16_t arrayLeds,buttonArray;
+    uint32_t timerRead;
+
 };
 #endif // MAINWINDOW_H
