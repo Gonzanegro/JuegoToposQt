@@ -7,6 +7,9 @@
 #include <QMessageBox>
 #include <QTimer>
 #include "qpaintbox.h"
+#include <stdlib.h>
+#include <QDateTime>
+
 
 #define CBWAITING 0 //indices de la combobox
 #define CBOPENP 1
@@ -34,18 +37,34 @@ private slots:
     void SetBufTX(uint8_t ID);
     void decodeData();
     void miTimerOnTime();
+    void juegoOnTime();
     void paint();
-    void refreshButtons();
+    void refreshButtons(uint16_t mask,uint index );
     void refreshLeds(uint16_t mask,uint8_t index);
-    void on_spinBox_valueChanged(int arg1);
-
+    void doGame();
 private:
     Ui::MainWindow *ui;
 
     QSerialPort *QSerialPort1;
     QString strRx;
     QTimer * miTimer;
+    QTimer * timerJuego;
     QPaintBox *miPaintBox;
+
+typedef union{      //typedef--------------------------------------------------------
+        //struct{
+            unsigned char b0: 1;
+            unsigned char b1: 1;
+            unsigned char b2: 1;
+            unsigned char b3: 1;
+            unsigned char b4: 1;
+            unsigned char b5: 1;
+            unsigned char b6: 1;
+            unsigned char b7: 1;
+        //}bit;
+        //unsigned char byte;
+    }_uflag;
+_uflag myFlags;
 
     typedef enum{
         START,
@@ -58,6 +77,12 @@ private:
     }_eProtocol;
 
     _eProtocol estado;
+    typedef enum{
+        WAIT,
+        BEGIN,
+        PLAYING,
+    }_eGame;
+    _eGame gameState;
 
     typedef enum{
         OPENPORT=0,
@@ -91,9 +116,18 @@ private:
     }_udat;
 
     _udat myWord;
+
+    typedef struct{
+     uint8_t maxTimeOutside;
+     uint8_t timeOutside;
+     uint8_t userTimeReaction;
+    }_sledTime;
+
+    _sledTime ledsGame[4];
+
     uint8_t  index, nbytes, cks, header, timeoutRx,numLed,ledState,numButton,flanco;
-    uint16_t arrayLeds,buttonArray;
-    uint32_t timerRead;
+    uint16_t arrayLeds,buttonArray,gameTime=0;
+    uint32_t timerRead=0,timeFalling=0,timeRising=0;
 
 };
 #endif // MAINWINDOW_H

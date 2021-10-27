@@ -7,6 +7,7 @@ MainWindow::MainWindow(QWidget *parent)
     , ui(new Ui::MainWindow)
 {
     miTimer = new QTimer(this);
+    timerJuego = new QTimer(this);
     ui->setupUi(this);
     miPaintBox = new QPaintBox(0,0,ui->widget);
     QSerialPort1= new QSerialPort(this);
@@ -17,19 +18,25 @@ MainWindow::MainWindow(QWidget *parent)
     QSerialPort1->setFlowControl(QSerialPort::NoFlowControl);
     connect(QSerialPort1, &QSerialPort::readyRead, this, &MainWindow::onQSerialPort1Rx);
     connect(miTimer,&QTimer::timeout,this,&MainWindow::miTimerOnTime);
+    connect(timerJuego,&QTimer::timeout,this,&MainWindow::juegoOnTime);
     ui->textBrowser->setTextColor(255);
     ui->textBrowser->append("seleccione un comando y presione el boton enviar.\n *PRIMERO ENVIE OPENPORT*");
     ui->pushButton->setEnabled(false);
+    ui->state->setFrameStyle(0);
+    ui->state->setText("    ESPERANDO CONEXION...    ");
+
     miTimer->start(10);
 
-}
+    timerJuego->start(30);
 
+    QDateTime dt;
+    srand(dt.currentDateTime().time().msec());
+    myFlags.b0=0;
+}
 MainWindow::~MainWindow()
 {
     delete ui;
 }
-
-
 void MainWindow::on_comboBox_currentIndexChanged(int index)
 {
     switch (index) {
@@ -73,12 +80,14 @@ void MainWindow::on_pushButton_clicked(){
                         QSerialPort1->close(); //lo cierra
                         ui->comboBox->setItemText(1,"Open Port");//si se pudo cerrar
                         ui->textBrowser->append("**************PUERTO CERRADO***************");
+                        ui->state->setText("    ESPERANDO CONEXION...    ");
                         miPaintBox->getCanvas()->fill(Qt::black);
                         miPaintBox->update();
                     }
                     else{
                         if(QSerialPort1->open(QSerialPort::ReadWrite)){
                             ui->comboBox->setItemText(1,"close Port");//si se pudo cerrar//si se pudo abrir
+                            ui->state->setText("CONEXION LISTA: ESPERANDO JUGADOR");
                             miPaintBox->getCanvas()->fill(Qt::transparent);
                             paint();//para empezar a dibujar
                         }else{
@@ -124,12 +133,8 @@ void MainWindow::SetBufTX(uint8_t ID){
         bufTX.payLoad[NBYTES]=0x02;
         break;
         case SET_LEDS:
-        if(ui->checkBox->isChecked())
-            ledState=1;
-        else
-            ledState=0;
         bufTX.payLoad[bufTX.index++]=SET_LEDS;
-        bufTX.payLoad[bufTX.index++]=ui->spinBox->value();//numLed;
+        bufTX.payLoad[bufTX.index++]=numLed;
         bufTX.payLoad[bufTX.index++]=ledState;
         bufTX.payLoad[NBYTES]=0x04;
         break;
@@ -162,6 +167,16 @@ void MainWindow::miTimerOnTime(){
         estado=START;
     }
 }
+void MainWindow::juegoOnTime(){
+   if(gameTime!=0){
+        gameTime--;
+    }else{
+         if(myFlags.b0==1)
+            gameState=WAIT;
+   }
+   ui->lcdErrores->display(QString().number(gameTime,10));
+   doGame();
+}
 void MainWindow::decodeData(){
     QString str ;
     uint16_t mask=0;
@@ -177,6 +192,7 @@ void MainWindow::decodeData(){
                 myWord.ui8[1]=bufRX.payLoad[3];
                 arrayLeds=myWord.ui16[0];
                 for(int i=0;i<4;i++){
+                    mask=0;
                     mask |= 1<<i;
                     refreshLeds(mask,i+1);
                 }
@@ -187,6 +203,7 @@ void MainWindow::decodeData(){
                 myWord.ui8[1]=bufRX.payLoad[3];
                 arrayLeds=myWord.ui16[0];
                 for(int i=0;i<4;i++){
+                    mask=0;
                     mask |= 1<<i;
                     refreshLeds(mask,i+1);
                 }
@@ -195,7 +212,8 @@ void MainWindow::decodeData(){
                 myWord.ui8[0]=bufRX.payLoad[2];
                 myWord.ui8[1]=bufRX.payLoad[3];
                 buttonArray=myWord.ui16[0];
-                refreshButtons();
+                for(int i=0;i<4;i++)
+                refreshButtons(mask,i+1);
             break;
             case BUTTONEVENT:
                 numButton=bufRX.payLoad[2];
@@ -206,9 +224,18 @@ void MainWindow::decodeData(){
                 myWord.ui8[3]=bufRX.payLoad[7];
                 timerRead=myWord.ui32;
                 str=" MBED -> PC : se presiono un boton";
-
-                refreshButtons();
-                SetBufTX(GET_LEDS);
+                refreshButtons(0,numButton);
+                SetBufTX(GET_LEDS); //actualiza el array de LEDS
+                if(gameState==WAIT){
+                    if(flanco==2)//falling
+                        timeFalling=timerRead;
+                    if(flanco==3) //rising
+                        timeRising=timerRead;
+                    if(timeRising !=0 && timeRising-timeFalling>1000){
+                        gameState=BEGIN;
+                        gameTime=100;//tiempo que se va a ejecutar el begining
+                    }
+                 }
             break;
             default:
             str=((char *)bufRX.payLoad);
@@ -346,7 +373,9 @@ void MainWindow::paint(){
         painter.drawRoundedRect(((ledPositionx*i)-(buttonSize/2)),(buttonPositiony-(buttonSize/2)),buttonSize,buttonSize,ratio,ratio);
 
     ledSize=22;
+    pen.setWidth(1);
     brush.setColor(Qt::black);
+    painter.setPen(pen);
     painter.setBrush(brush);
     for(int a=1;a<5;a++) //dibuja los centros de los botones
         painter.drawEllipse((ledPositionx*a)-(ledSize/2),buttonPositiony-(ledSize/2),ledSize,ledSize);// led2
@@ -362,18 +391,29 @@ void MainWindow::refreshLeds(uint16_t mask,uint8_t index){
     QPen pen;
     QBrush brush;
 
-
+    switch (index){
+        case 1:
+        brush.setColor(Qt::green);
+        break;
+        case 2:
+        brush.setColor(Qt::red);
+        break;
+        case 3:
+        brush.setColor(Qt::yellow);
+        break;
+        case 4:
+        brush.setColor(Qt::blue);
+        break;
+    }
 
     pen.setColor(Qt::black);
     pen.setWidth(3);
-    brush.setColor(Qt::black);
     brush.setStyle(Qt::SolidPattern);
     painter.setPen(pen);
     painter.setBrush(brush);
 
 
        if(arrayLeds & mask){ //primer led
-        brush.setColor(Qt::green);
         painter.setBrush(brush);
         painter.drawEllipse((ledPositionx*index)-(ledSize/2),ledPositiony-(ledSize/2),ledSize,ledSize);// led2
        }else{
@@ -384,20 +424,96 @@ void MainWindow::refreshLeds(uint16_t mask,uint8_t index){
 
     miPaintBox->update();
 }
-void MainWindow::refreshButtons(){
+void MainWindow::refreshButtons(uint16_t mask,uint index){
+    uint16_t buttonSize=22,buttonPositiony=200,buttonPositionx=150;
+    QPainter painter(miPaintBox->getCanvas());
+    QPen pen;
+    QBrush brush;
 
-//    QPainter painter(miPaintBox->getCanvas());
-//    QPen pen;
-//    QBrush brush;
-//    SetBufTX(GET_BUTTONS);
-//    uint16_t mask=0xFFFF;
-
-
-//    miPaintBox->update();
+    brush.setStyle(Qt::SolidPattern);
+    pen.setWidth(3);
+    if(!mask){
+            if(flanco==2){
+                brush.setColor(Qt::white);
+                brush.setStyle(Qt::SolidPattern);
+                pen.setStyle(Qt::DotLine);
+            }else{
+              brush.setColor(Qt::black);
+              brush.setStyle(Qt::SolidPattern);
+              pen.setStyle(Qt::SolidLine);
+            }
+            painter.setBrush(brush);
+            painter.setPen(pen);
+            painter.drawEllipse((buttonPositionx*(index+1) )-(buttonSize/2),buttonPositiony-(buttonSize/2),buttonSize,buttonSize);// led2
 }
 
-void MainWindow::on_spinBox_valueChanged(int arg1)
-{
-    SetBufTX(SET_LEDS);
-}
+//    for(int a=1;a<5;a++) //dibuja los centros de los botones
+//        painter.drawEllipse((buttonPositionx*a )-(buttonSize/2),buttonPositiony-(buttonSize/2),buttonSize,buttonSize);// led2
 
+
+
+   miPaintBox->update();
+}
+void MainWindow::doGame(){
+    switch(gameState){
+        case WAIT:
+                if(myFlags.b0==1){//si finalizo
+                    gameTime=100;//tiempo que se va a ejecutar el begining
+                }
+                if(gameTime!=0){//si se termino de jugar
+                    if(gameTime==70 || gameTime==40 || gameTime==10){//festejo de los leds
+                        for(int i=0;i<4;i++){
+                            numLed=i+1;
+                            ledState=1;
+                            SetBufTX(SET_LEDS);
+                        }
+                    }
+                    if(gameTime==50 || gameTime==20 || gameTime==1){
+                        for(int i=0;i<4;i++){
+                            numLed=i+1;
+                            ledState=0;
+                            SetBufTX(SET_LEDS);
+                        }
+                    }//termina el festejo de los leds
+                }
+                myFlags.b0=0;
+                if(QSerialPort1->isOpen())
+                ui->state->setTextColor(Qt::black);
+                if(QSerialPort1->isOpen())
+                ui->state->setText("  ESPERANDO JUGADOR... ");
+                else
+                ui->state->setText("DESCONECTADO... SELECCIONE OPEN PORT");
+                timeRising=0;
+
+        break;
+        case BEGIN:
+            myFlags.b0=1;
+            ui->state->setTextColor(Qt::green);
+            ui->state->setText(" comenzando ");
+            if(gameTime==70 || gameTime==40 || gameTime==10){//indica el incio del juego destellando 3 veces los leds
+                for(int i=0;i<4;i++){
+                    numLed=i+1;
+                    ledState=1;
+                    SetBufTX(SET_LEDS);
+                }
+            }
+            if(gameTime==50 || gameTime==20 || gameTime==0){
+                for(int i=0;i<4;i++){
+                    numLed=i+1;
+                    ledState=0;
+                    SetBufTX(SET_LEDS);
+                }
+            }
+            if(gameTime==0){//si termino la inicializacion
+                gameTime=1000; //pone la variable en 1000(30 segundos)
+                gameState=PLAYING; //cambia de estado
+                }
+        break;
+        case PLAYING:
+            ui->state->setText("PLAYING");
+        break;
+        default:
+            gameState=WAIT;
+        break;
+    }
+}
