@@ -16,7 +16,12 @@
 #define CBALIVE 2
 #define CBGETLED 3
 #define CBSETLED 4
-
+#define ONTIME 50
+#define MAXTGO 6000
+#define MINTGO 1000
+#define MAXTOUTSIDE 5000
+#define MINTOUTSIDE 2000
+#define TIMEBEFORE 3000
 
 QT_BEGIN_NAMESPACE
 namespace Ui { class MainWindow; }
@@ -53,7 +58,7 @@ private:
 
 typedef union{      //typedef--------------------------------------------------------
         //struct{
-            unsigned char b0: 1;
+            unsigned char gameStarted: 1;
             unsigned char b1: 1;
             unsigned char b2: 1;
             unsigned char b3: 1;
@@ -118,14 +123,18 @@ _uflag myFlags;
     _udat myWord;
 
     typedef struct{
-     uint8_t maxTimeOutside;
-     uint8_t timeOutside;
-     uint8_t userTimeReaction;
+     uint16_t timeToGo;
+     uint16_t timeOutside;
+     uint16_t userTimeReaction;
+     uint16_t timeActual;
+     unsigned char isOutside;
+     unsigned char gotTime;
     }_sledTime;
 
     _sledTime ledsGame[4];
 
     uint8_t  index, nbytes, cks, header, timeoutRx,numLed,ledState,numButton,flanco;
+    uint8_t  errores=0,fallos=0,aciertos=0,puntos=0;
     uint16_t arrayLeds,buttonArray,gameTime=0;
     uint32_t timerRead=0,timeFalling=0,timeRising=0;
 

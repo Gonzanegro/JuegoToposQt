@@ -22,10 +22,10 @@
    <widget class="QTextBrowser" name="textBrowser">
     <property name="geometry">
      <rect>
-      <x>0</x>
-      <y>0</y>
-      <width>91</width>
-      <height>221</height>
+      <x>10</x>
+      <y>220</y>
+      <width>41</width>
+      <height>31</height>
      </rect>
     </property>
    </widget>
@@ -268,6 +268,56 @@ p, li { white-space: pre-wrap; }
     </property>
     <property name="text">
      <string>   ERRORES</string>
+    </property>
+   </widget>
+   <widget class="QLabel" name="label_4">
+    <property name="geometry">
+     <rect>
+      <x>300</x>
+      <y>0</y>
+      <width>111</width>
+      <height>21</height>
+     </rect>
+    </property>
+    <property name="font">
+     <font>
+      <pointsize>10</pointsize>
+      <weight>75</weight>
+      <bold>true</bold>
+     </font>
+    </property>
+    <property name="text">
+     <string> PUNTUACION :</string>
+    </property>
+   </widget>
+   <widget class="QLCDNumber" name="lcdCrono">
+    <property name="geometry">
+     <rect>
+      <x>0</x>
+      <y>110</y>
+      <width>111</width>
+      <height>81</height>
+     </rect>
+    </property>
+   </widget>
+   <widget class="QLabel" name="label_5">
+    <property name="geometry">
+     <rect>
+      <x>20</x>
+      <y>80</y>
+      <width>61</width>
+      <height>21</height>
+     </rect>
+    </property>
+    <property name="font">
+     <font>
+      <pointsize>10</pointsize>
+      <weight>75</weight>
+      <bold>true</bold>
+     </font>
+    </property>
+    <property name="text">
+     <string> TIEMPO</string>
     </property>
    </widget>
   </widget>
