@@ -15,22 +15,22 @@ MainWindow::MainWindow(QWidget *parent)
     QSerialPort1->setBaudRate(115200);
     QSerialPort1->setDataBits(QSerialPort::Data8);
     QSerialPort1->setParity(QSerialPort::NoParity);
-    QSerialPort1->setFlowControl(QSerialPort::NoFlowControl);
-    connect(QSerialPort1, &QSerialPort::readyRead, this, &MainWindow::onQSerialPort1Rx);
-    connect(miTimer,&QTimer::timeout,this,&MainWindow::miTimerOnTime);
-    connect(timerJuego,&QTimer::timeout,this,&MainWindow::juegoOnTime);
+    QSerialPort1->setFlowControl(QSerialPort::NoFlowControl); //parametros del puerto serie
+    connect(QSerialPort1, &QSerialPort::readyRead, this, &MainWindow::onQSerialPort1Rx);//conecta para hacer la interrupcion de recepción de datos
+    connect(miTimer,&QTimer::timeout,this,&MainWindow::miTimerOnTime); //timeout para bufer de datos
+    connect(timerJuego,&QTimer::timeout,this,&MainWindow::juegoOnTime); //timeout para funcion de juego
     ui->textBrowser->setTextColor(255);
     ui->textBrowser->append("seleccione un comando y presione el boton enviar.\n *PRIMERO ENVIE OPENPORT*");
-    ui->pushButton->setEnabled(false);
+    ui->pushButton->setEnabled(false); //para no permitir enviar datos
     ui->state->setFrameStyle(0);
     ui->state->setText("    ESPERANDO CONEXION...    ");
 
     miTimer->start(10);
-
-    timerJuego->start(ONTIME);
+    ui->textBrowser->close();
+    timerJuego->start(ONTIME); //inicializa el timer con el intevalo
 
     QDateTime dt;
-    srand(dt.currentDateTime().time().msec());
+    srand(dt.currentDateTime().time().msec()); //semilla
     myFlags.gameStarted=0;
 }
 MainWindow::~MainWindow()
@@ -39,7 +39,7 @@ MainWindow::~MainWindow()
 }
 void MainWindow::on_comboBox_currentIndexChanged(int index)
 {
-    switch (index) {
+    switch (index) { //para los comandos de la combobox
         case CBWAITING:
             ui->pushButton->setEnabled(false);
         break;
@@ -86,7 +86,7 @@ void MainWindow::on_pushButton_clicked(){
                     }
                     else{
                         if(QSerialPort1->open(QSerialPort::ReadWrite)){
-                            ui->comboBox->setItemText(1,"close Port");//si se pudo cerrar//si se pudo abrir
+                            ui->comboBox->setItemText(1,"close Port");//si se pudo abrir
                             ui->state->setText("CONEXION LISTA: ESPERANDO JUGADOR");
                             miPaintBox->getCanvas()->fill(Qt::transparent);
                             paint();//para empezar a dibujar
@@ -101,16 +101,16 @@ void MainWindow::on_pushButton_clicked(){
             SetBufTX(ALIVE);
         break;
         case SET_LEDS:
-            //SetBufTX(SET_LEDS);
+            //EMPTY;
         break;
         case GET_LEDS:
             SetBufTX(GET_LEDS);
         break;
         case GET_BUTTONS:
-
+            SetBufTX(GET_BUTTONS);
         break;
         case BUTTONEVENT:
-
+        //EMPTY
         break;
 
     }
@@ -123,17 +123,17 @@ void MainWindow::SetBufTX(uint8_t ID){
     bufTX.payLoad[bufTX.index++]='E';
     bufTX.payLoad[bufTX.index++]='R';
     bufTX.payLoad[bufTX.index++]= 0 ;
-    bufTX.payLoad[bufTX.index++]=':';
+    bufTX.payLoad[bufTX.index++]=':';//termina de armar el header
     switch (ID) {
-        case ALIVE:
+        case ALIVE: //manda alive
         bufTX.payLoad[bufTX.index++]=ALIVE;
         bufTX.payLoad[NBYTES]=0x02;
         break;
-        case GET_LEDS:
+        case GET_LEDS: //pide leds
         bufTX.payLoad[bufTX.index++]=GET_LEDS;
         bufTX.payLoad[NBYTES]=0x02;
         break;
-        case SET_LEDS:
+        case SET_LEDS: //manda los leds
         bufTX.payLoad[bufTX.index++]=SET_LEDS;
         bufTX.payLoad[bufTX.index++]=numLed;
         bufTX.payLoad[bufTX.index++]=ledState;
@@ -169,21 +169,21 @@ void MainWindow::miTimerOnTime(){
     }
 }
 void MainWindow::juegoOnTime(){
-   if(gameTime!=0){
+   if(gameTime!=0){ //Si hay tiempo de juego
         gameTime--;
-   }else{
-        if(myFlags.gameStarted==1)
+   }else{ //Si no hay
+        if(myFlags.gameStarted==1) //En caso de que se haya jugado
             gameState=WAIT;
    }
 
-   doGame();
+   doGame(); //funcion encargada de ejecutar el juego
 }
 void MainWindow::decodeData(){
     QString str ;
-    uint16_t mask=0;
+    uint16_t mask=0,maxTimeOutside=0,timeOutside=0,userTimeReaction=0;
     ui->textBrowser->setTextColor(Qt::red);
 
-        switch (bufRX.payLoad[1]){
+        switch (bufRX.payLoad[1]){ //ID
             case ALIVE:
                   str="MBED -> PC ID VALIDO ACK";
                 break;
@@ -192,13 +192,13 @@ void MainWindow::decodeData(){
                 myWord.ui8[0]=bufRX.payLoad[2];
                 myWord.ui8[1]=bufRX.payLoad[3];
                 arrayLeds=myWord.ui16[0];
-                for(int i=0;i<4;i++){
+                for(int i=0;i<4;i++){ //para dibujar los leds en pantalla
                     mask=0;
                     mask |= 1<<i;
                     refreshLeds(mask,i+1);
                 }
             break;
-            case SET_LEDS:
+            case SET_LEDS: //para prender y refrescarlos en pantalla
                 str="MBED->PC:SETLEDS ACK :)";
                 myWord.ui8[0]=bufRX.payLoad[2];
                 myWord.ui8[1]=bufRX.payLoad[3];
@@ -209,14 +209,19 @@ void MainWindow::decodeData(){
                     refreshLeds(mask,i+1);
                 }
             break;
-            case GET_BUTTONS:
+            case GET_BUTTONS: //Pide el array de botones
                 myWord.ui8[0]=bufRX.payLoad[2];
                 myWord.ui8[1]=bufRX.payLoad[3];
                 buttonArray=myWord.ui16[0];
-                //for(int i=0;i<4;i++)
-                //refreshButtons(mask,i+1);
+
+//                for(int i=0;i<4;i++){
+//                    buttonMask=0xFFFF;
+//                    buttonMask=^buttonArray;
+//                    refreshButtons(buttonMask,i+1);
+//                }
+
             break;
-            case BUTTONEVENT:
+            case BUTTONEVENT: //Si se presiono un boton
                 numButton=bufRX.payLoad[2];
                 flanco=bufRX.payLoad[3];
                 myWord.ui8[0]=bufRX.payLoad[4];
@@ -225,18 +230,50 @@ void MainWindow::decodeData(){
                 myWord.ui8[3]=bufRX.payLoad[7];
                 timerRead=myWord.ui32;
                 str=" MBED -> PC : se presiono un boton";
-                refreshButtons(0,numButton);
+                refreshButtons(numButton);
                 SetBufTX(GET_LEDS); //actualiza el array de LEDS
-                if(gameState==WAIT){
-                    if(flanco==2)//falling
+                if(gameState==WAIT){ //Si no esta jugando
+                    if(flanco==FALLING)//falling
                         timeFalling=timerRead;
-                    if(flanco==3) //rising
+                    if(flanco==RISING) //rising
                         timeRising=timerRead;
-                    if(timeRising !=0 && timeRising-timeFalling>1000){
+                    if(timeRising !=0 && timeRising-timeFalling>1000){ //compara los tiempos de flancos para iniciar el juego
                         gameState=BEGIN;
                         gameTime=3000/ONTIME;//tiempo que se va a ejecutar el begining
+                        ui->LcdAciertos->display(aciertos);
+                        ui->lcdErrores->display(errores);
+                        ui->lcdFallos->display(fallos);
+                        ui->lcdPuntaje->display(puntos);
                     }
                  }
+                if(gameState==PLAYING){ //si esta jugando
+                    if(!ledsGame[numButton].isOutside && flanco==FALLING){ //si el led no esta encendido y el flanco es falling
+                          errores++;
+                          puntos-=20;
+                          ui->lcdPuntaje->display(puntos);
+                          ui->lcdErrores->display(errores);
+                    }
+                    if(ledsGame[numButton].isOutside && flanco==FALLING){ //Si el led salio y el flanco es falling
+                        numLed=numButton+1;
+                        ledState=0;
+                        SetBufTX(SET_LEDS);
+
+                        ledsGame[numButton].isOutside=0; //si se apago apago la flag de salida
+                        ledsGame[numButton].gotTime=0; //indico que quiero volver a asignarle tiempo
+
+                        aciertos++; //Aumenta un acierto
+
+                        maxTimeOutside=ledsGame[numButton].timeToGo*ledsGame[numButton].timeToGo;//calculo numerador
+
+                        timeOutside=ledsGame[numButton].timeOutside;//calculo denominador 1
+
+                        userTimeReaction=ledsGame[numButton].timeActual-gameTime;//calculo denominador 2
+
+                        puntos=puntos+((maxTimeOutside)/(timeOutside*userTimeReaction));//calculo de la nueva puntuacion
+                        ui->LcdAciertos->display(aciertos);
+                        ui->lcdPuntaje->display(puntos);
+                    }
+                }
             break;
             default:
             str=((char *)bufRX.payLoad);
@@ -266,7 +303,7 @@ void MainWindow::onQSerialPort1Rx(){
          str = str + "/" + QString("%1").arg(reception[i],2,16,QChar('0')) +"/";
     }
     ui->textBrowser->setTextColor(Qt::green);
-    ui->textBrowser->append("MBED->PC: " +str );
+    ui->textBrowser->append("MBED->PC: " +str ); //imprime el crudo
     bufRX.timeOut =5;
     for(int i=0;i<count;i++){
         switch (estado){
@@ -392,7 +429,7 @@ void MainWindow::refreshLeds(uint16_t mask,uint8_t index){
     QPen pen;
     QBrush brush;
 
-    switch (index){
+    switch (index){ //para seleccionar los colores
         case 1:
         brush.setColor(Qt::green);
         break;
@@ -411,13 +448,13 @@ void MainWindow::refreshLeds(uint16_t mask,uint8_t index){
     pen.setWidth(3);
     brush.setStyle(Qt::SolidPattern);
     painter.setPen(pen);
-    painter.setBrush(brush);
+    painter.setBrush(brush); //Setea los parametros
 
 
-       if(arrayLeds & mask){ //primer led
+       if(arrayLeds & mask){ //dibuja los leds segun su indice *1 *2 *3 *4
         painter.setBrush(brush);
         painter.drawEllipse((ledPositionx*index)-(ledSize/2),ledPositiony-(ledSize/2),ledSize,ledSize);// led2
-       }else{
+       }else{//si estan apagados
         brush.setColor(Qt::white);
         painter.setBrush(brush);
         painter.drawEllipse((ledPositionx*index)-(ledSize/2),ledPositiony-(ledSize/2),ledSize,ledSize);// led2
@@ -425,7 +462,7 @@ void MainWindow::refreshLeds(uint16_t mask,uint8_t index){
 
     miPaintBox->update();
 }
-void MainWindow::refreshButtons(uint16_t mask,uint index){
+void MainWindow::refreshButtons(uint index){
     uint16_t buttonSize=22,buttonPositiony=200,buttonPositionx=150;
     QPainter painter(miPaintBox->getCanvas());
     QPen pen;
@@ -433,7 +470,7 @@ void MainWindow::refreshButtons(uint16_t mask,uint index){
 
     brush.setStyle(Qt::SolidPattern);
     pen.setWidth(3);
-    if(!mask){
+
             if(flanco==2){
                 brush.setColor(Qt::white);
                 brush.setStyle(Qt::SolidPattern);
@@ -446,7 +483,7 @@ void MainWindow::refreshButtons(uint16_t mask,uint index){
             painter.setBrush(brush);
             painter.setPen(pen);
             painter.drawEllipse((buttonPositionx*(index+1) )-(buttonSize/2),buttonPositiony-(buttonSize/2),buttonSize,buttonSize);// led2
-}
+
 
 //    for(int a=1;a<5;a++) //dibuja los centros de los botones
 //        painter.drawEllipse((buttonPositionx*a )-(buttonSize/2),buttonPositiony-(buttonSize/2),buttonSize,buttonSize);// led2
@@ -463,12 +500,9 @@ void MainWindow::doGame(){
                     errores=0;
                     puntos=0;
                     fallos=0;
-                    aciertos=0;
+                    aciertos=0; //termina de resetear
                     gameTime=TIMEBEFORE/ONTIME;//tiempo que se va a ejecutar el begining
                     ui->lcdCrono->display("-----");
-                    ui->lcdFallos->display(fallos);
-                    ui->lcdErrores->display(errores);
-                    ui->LcdAciertos->display(aciertos);
                 }
                 if(gameTime!=0){//si se termino de jugar
                     if(gameTime==60 || gameTime==45 || gameTime==15){//festejo de los leds
@@ -484,21 +518,21 @@ void MainWindow::doGame(){
                             ledState=0;
                             SetBufTX(SET_LEDS);
                         }
-                    }//termina el festejo de los leds
+                    }//termina la señalizacion de los leds
                 }
-                myFlags.gameStarted=0;
+                myFlags.gameStarted=0; //reseteo de flag de juego
                 if(QSerialPort1->isOpen())
                 ui->state->setTextColor(Qt::black);
                 if(QSerialPort1->isOpen())
-                ui->state->setText("  ESPERANDO JUGADOR... ");
+                    ui->state->setText("  ESPERANDO JUGADOR... ");
                 else
-                ui->state->setText("DESCONECTADO... SELECCIONE OPEN PORT");
+                    ui->state->setText("DESCONECTADO... SELECCIONE OPEN PORT");
                 timeRising=0;
 
         break;
         case BEGIN:
             myFlags.gameStarted=1;
-            for(int i=0;i<4;i++){
+            for(int i=0;i<4;i++){//inicializa los valores antes de jugar
                 ledsGame[i].timeToGo = 0;
                 ledsGame[i].timeOutside = 0;
                 ledsGame[i].timeActual=0;
@@ -514,7 +548,7 @@ void MainWindow::doGame(){
                     SetBufTX(SET_LEDS);
                 }
             }
-            if(gameTime==53 || gameTime==30 || gameTime==1){
+            if(gameTime==53 || gameTime==30 || gameTime==1){//apaga los leds
                 for(int i=0;i<4;i++){
                     numLed=i+1;
                     ledState=0;
@@ -529,42 +563,43 @@ void MainWindow::doGame(){
         case PLAYING: //hace el juego
             ui->state->setText("PLAYING");
             ui->lcdCrono->display(QString().number((gameTime*ONTIME)/1000,10));//para el cronometro
-            for(int a=0;a<4;a++){//genera los tiempos aleatorios
-                 if(!(ledsGame[a].gotTime)){  //Si no se le asigno ningun tiempo a ese led
-                        ledsGame[a].timeToGo = ((rand()%(MAXTGO-MINTGO))+MINTGO)/ONTIME ;
-                        ledsGame[a].timeOutside = ((rand()%(MAXTOUTSIDE-MINTOUTSIDE))+MINTOUTSIDE)/ONTIME;
-                        ledsGame[a].timeActual=gameTime;
-                        ledsGame[a].gotTime=1;
-                        ledsGame[a].isOutside=0;
-                 }
-            }
 
-            for(int i=0;i<4;i++){
-                if(!ledsGame[i].isOutside){
+            for(int i=0;i<4;i++){//genera los tiempos aleatorios
+                 if(!(ledsGame[i].gotTime)){  //Si no se le asigno ningun tiempo a ese led
+                        ledsGame[i].timeToGo = ((rand()%(MAXTGO-MINTGO))+MINTGO)/ONTIME ;
+                        ledsGame[i].timeOutside = ((rand()%(MAXTOUTSIDE-MINTOUTSIDE))+MINTOUTSIDE)/ONTIME;
+                        ledsGame[i].timeActual=gameTime;
+                        ledsGame[i].gotTime=1;
+                        ledsGame[i].isOutside=0;
+                 }
+//            }
+
+//            for(int i=0;i<4;i++){ //para encender los leds en el tiempo debido
+                if(!ledsGame[i].isOutside){//si el topo no salio
                     timeOn=ledsGame[i].timeActual-ledsGame[i].timeToGo;
-                    if(ledsGame[i].gotTime==1 && timeOn==gameTime){//prende los leds
+                    if(ledsGame[i].gotTime==1 && timeOn==gameTime){//si el topo tiene tiempos y ya se cumplio el tiempo de salida
                         numLed=i+1;
                         ledState=1;
-                        SetBufTX(SET_LEDS);
+                        SetBufTX(SET_LEDS);//prende los leds
                         ledsGame[i].timeActual=gameTime;
-                        ledsGame[i].isOutside=1;
+                        ledsGame[i].isOutside=1;//pone la flag que salio el topo
                     }
                 }
-             }
-                        for(int i=0;i<4;i++){
-                            if(ledsGame[i].isOutside){
-                                    timeOff=ledsGame[i].timeActual-ledsGame[i].timeOutside;
-                                    if(timeOff==gameTime){//apaga los leds
-                                        numLed=i+1;
-                                        ledState=0;
-                                        SetBufTX(SET_LEDS);
-                                        ledsGame[i].isOutside=0;
-                                        ledsGame[i].gotTime=0;
-                                        fallos+=1;
-                                        ui->lcdFallos->display(fallos);
-                                    }
-                            }
+                 if(ledsGame[i].isOutside){//si el topo esta afuera
+                        timeOff=ledsGame[i].timeActual-ledsGame[i].timeOutside;//lee el tiempo que tiene que estar encendido
+                        if(timeOff==gameTime){//si se agoto el tiempo (fallo )
+                            numLed=i+1;
+                            ledState=0;
+                            SetBufTX(SET_LEDS);//apaga los leds
+                            ledsGame[i].isOutside=0; //si se apago apago la flag de salida
+                            ledsGame[i].gotTime=0; //indico que quiero volver a asignarle tiempo
+                            fallos+=1;
+                            puntos-=10;
+                            ui->lcdFallos->display(fallos);
+                            ui->lcdPuntaje->display(puntos);
                         }
+                    }
+             }
 
 
         break;
